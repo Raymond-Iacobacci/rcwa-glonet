@@ -16,9 +16,9 @@ p['learning_rate'] = 0.01
 p['parameter_string'] = 'N' + str(p['N']) \
     + '-sigmoid_update' + str(p['sigmoid_update']) \
     + '-learning_rate' + str(p['learning_rate'])
-step = 30
+step = 10
 wavelengths = np.arange(400, 600 + step, step = step)/1000.0
-passthrough_band_indices = [4,5,6,7]
+passthrough_band_indices = [9,10,11]
 determinator = np.array([-1/(len(wavelengths) - len(passthrough_band_indices))] * len(wavelengths))
 determinator[passthrough_band_indices] = 1/len(passthrough_band_indices)
 determinator = tf.constant(determinator, dtype = tf.float64)
@@ -32,7 +32,7 @@ p['erd'] = p['ers'] = 3.4
 # Check all dimensions when done, also check reflectivity coefficients
 p['L'] = np.zeros(shape = (100,)) + 5.0 #THIS IS THE NUMBER OF LAYERS, WTF IS GOING ON????????
 # p['L'] = deepcopy(p['thetas']) + 50.0
-p['f'] = 0.0
+p['f'] = 1e9
 p['initial_k'] = np.zeros(shape = (len(p['L']) - 1, p['pixelsX'], p['pixelsY'])) + 1
 for i in range(len(p['initial_k'])):
     for j in range(len(p['initial_k'][i])):

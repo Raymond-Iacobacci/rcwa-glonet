@@ -19,6 +19,7 @@ def generate_scaled_metasurface(k, params):
     Ny = params['Ny']
     materials_shape = (batchSize, pixelsX, pixelsY, Nlay, Nx, Ny)
     UR = params['urd'] * np.ones(materials_shape) # Why is UR_t not influenced by k..?
+    print(k.shape)
     k=tf.clip_by_value(k, clip_value_min = 0, clip_value_max = params['ers'])
     # print(np.sum(k ** 2))
     # print("This is pulled in: ",k.shape)
@@ -28,9 +29,9 @@ def generate_scaled_metasurface(k, params):
     k = tf.tile(k, multiples = (batchSize, 1, 1, 1, Nx, Ny))
     # print(k.shape)
     layer_shape = (batchSize, pixelsX, pixelsY, 1, Nx, Ny)
-    ER_substrate = params['ers'] * tf.ones(layer_shape, dtype = tf.float32)
-    ER_t = tf.concat(values = [k, ER_substrate], axis = 3)
-
+    # ER_substrate = params['ers'] * tf.ones(layer_shape, dtype = tf.float32)
+    # ER_t = tf.concat(values = [k, ER_substrate], axis = 3)
+    ER_t = k
     # Cast to complex for subsequent calculations.
     ER_t = tf.cast(ER_t, dtype = tf.complex64)
     UR_t = tf.convert_to_tensor(UR, dtype = tf.float32)
@@ -231,7 +232,7 @@ def init_layered_metasurface(params, initial_height=0):
     
 def init_scaled_metasurface(params):
     if params['enable_random_init']:
-        return np.random.rand(params['Nlay'] - 1, params['pixelsX'], params['pixelsY']) * (params['erd'] - 1) + 1
+        return np.random.rand(params['Nlay'], params['pixelsX'], params['pixelsY']) * (params['erd'] - 1) + 1
     else:
         return params['initial_k']
 
@@ -354,7 +355,6 @@ def optimize_device(user_params): # Gets called once with wavelengths inbound
     
     # This flag is set if the solver encounters an error.
     params['err'] = False
-    
     # Define the free-space propagator and input field distribution
     # for the metasurface.
     params['f'] = user_params['f'] * 1E-9
@@ -400,30 +400,46 @@ def optimize_device(user_params): # Gets called once with wavelengths inbound
             # net = self.bn(net)
             net = tf.reduce_mean(net, axis = [0, -1])
             net = (activations.tanh(net * params['sigmoid_coeff']) * 0.5 + 0.5) * (params['erd'] - 1) + 1
-            net = net[: -1, :],  # Drop the last layer for purposes of substrate embedding
-            net = tf.reshape(net, (99, 100, 1))
-            return net
+            # net = net[: -1, :],  # Drop the last layer for purposes of substrate embedding
+            # net = tf.reshape(net, (99, 100, 1))
+
+            return tf.expand_dims(net, axis = -1)
         # We also need to write a generation function each time, it does start from each training iteration...?
     generator = Generator()
+    NUM_TRIALS = 1
     # generator.train()
     # Begin optimization.
     if params['enable_print']: print('Optimizing... ', end="")
     N = user_params['N']
     loss = np.zeros(N+1)
     gk = tf.random.normal((init_dim, init_dim), mean=0, stddev=4, dtype = tf.dtypes.float64)
+    gk_array = [tf.random.normal((init_dim, init_dim), mean=0, stddev=4, dtype = tf.dtypes.float64) for i in range(NUM_TRIALS)]
+    import pickle
+    best_loss = np.inf
     for i in range(N):
         if params['enable_print']: print(str(i) + ', ', end="")
         # Calculate gradients.
-        
+        # Add in binarization coefficient
         with tf.GradientTape() as tape:
             l = []
             # l = loss_function(h, params)
-            # for j in range(3):
-                # random_kernel = tf.random.normal(shape = (init_dim, init_dim), stddev = 2.0)
-                # l.append(loss_function(generator(random_kernel), params))
-                # print(l[-1].numpy())
+            # // Uncomment the next 4 lines and comment the fifth to start a randomization procedure after every step
+            # for j in range(NUM_TRIALS):
+            #     random_kernel = tf.random.normal(shape = (init_dim, init_dim), stddev = 2.0)
+            #     l.append(loss_function(generator(random_kernel), params))
             # l = tf.reduce_mean(l)
-            l = loss_function(generator(gk), params)
+            # l = loss_function(generator(gk), params)
+            for j in gk_array:
+                out = generator(j)
+                print("This is the out shape",out.shape)
+                # with open(f"../values_2/prior_{NUM_TRIALS}_{i}.txt", 'wb') as f:
+                #     pickle.dump(out, f)
+                
+                l.append(loss_function(out, params))
+            l = tf.reduce_mean(l)
+            # with open(f'../values_2/prior_{NUM_TRIALS}_loss_history.txt', 'a+') as f:
+            #     f.write(str(l))
+            #     f.write('\n')
             print(l)
             grads = tape.gradient(l, generator.trainable_weights) # This is wehre the casting issue pops up
             # grads = tape.gradient(l, [h])
@@ -432,6 +448,12 @@ def optimize_device(user_params): # Gets called once with wavelengths inbound
         # opt.apply_gradients(zip(grads, [h]))
         # Keep track of iteration loss.
         loss[i] = l
+
+        # Save model to file
+        checkpoint_path = f"training_2/cp-{i}.ckpt"
+        if loss[i] < best_loss:
+            best_loss = loss[i]
+            generator.save_weights(checkpoint_path)
 
         # Anneal sigmoid coefficient.
         params['sigmoid_coeff'] += (params['sigmoid_update'] / N)
@@ -531,7 +553,6 @@ def hyperparameter_gridsearch(user_params):
     
     return results
 
-                           
 def log_result(result, log_filename):
     
     # Open log file in write mode.

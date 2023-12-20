@@ -3,9 +3,6 @@ from tensorflow.keras import layers
 
 
 
-
-
-
 class Generator(tf.keras.Model):
     def __init__(self, params):
         super(Generator, self).__init__()
