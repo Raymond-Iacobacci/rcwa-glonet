@@ -22,9 +22,23 @@ import json
 import gc
 
 import solver_pt
-import importlib
-importlib.reload(solver_pt)
 import rcwa_utils_pt
+
+def generate_metasurface(k, params):    # NOTE: no substrate layer is added
+    batchSize = params['batchSize']
+    pixelsX = params['pixelsX']
+    pixelsY = params['pixelsY']
+    Nlay = params['Nlay']
+    Nx = params['Nx']
+    Ny = params['Ny']
+    materials_shape = (batchSize, pixelsX, pixelsY, Nlay, Nx, Ny)
+    UR_t = params['urd'] * torch.ones(materials_shape)
+    UR_t = UR_t.type(torch.complex64)
+    k = torch.clamp(k, min = 0, max = Nlay-1)
+    k = k[None, :, :, :, None, None]
+    ER_t = torch.tile(k, (batchSize, 1, 1, 1, Nx, Ny))
+    ER_t = ER_t.type(torch.complex64)
+    return ER_t, UR_t
 
 
 def generate_layered_metasurface(h, params):
@@ -191,6 +205,15 @@ def get_substrate_layer(params):
     
     return ER_substrate
 
+def init_metasurface(params, initial_heights = None):
+    optimization_shape = (100, 100)
+    if initial_heights is None:
+        assert params['enable_random_init']
+        return torch.rand(size = (params['pixelsX'], params['pixelsY'], params['Nlay']), dtype = torch.float32)
+    else:
+        assert [int(x) for x in initial_heights.size()] == (100, 100) and not params['enable_random_init']
+        return initial_heights.float()
+
 
 def init_layered_metasurface(params, initial_height=0):
     '''
@@ -316,7 +339,6 @@ def evaluate_solution(focal_plane, params):
     eval_score = torch.sum(torch.abs(focal_plane[0, index-r:index+r, index-r:index+r]) )
 
     return float(eval_score)
-
 
 def optimize_device(user_params):
     '''
