@@ -15,16 +15,18 @@ hyperparameter_gridsearch: use to optimize many devices for a given grid of
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.lines as lines
+# import matplotlib.lines as lines
 from matplotlib import colors
 import itertools
 import json
-import gc
+# import gc
+import net
 
 import solver_pt
 import rcwa_utils_pt
 
-def generate_metasurface(k, params):    # NOTE: no substrate layer is added
+def generate_metasurface(k, params):    # NOTE: no substrate layer is added, this is taking exceptionally long for some reason...????
+    print("Beginning")
     batchSize = params['batchSize']
     pixelsX = params['pixelsX']
     pixelsY = params['pixelsY']
@@ -33,11 +35,18 @@ def generate_metasurface(k, params):    # NOTE: no substrate layer is added
     Ny = params['Ny']
     materials_shape = (batchSize, pixelsX, pixelsY, Nlay, Nx, Ny)
     UR_t = params['urd'] * torch.ones(materials_shape)
+    print("Case")
     UR_t = UR_t.type(torch.complex64)
-    k = torch.clamp(k, min = 0, max = Nlay-1)
+    print("Cast")
+    k = torch.clamp(k, min = 0, max = 1)
+    print(42)
     k = k[None, :, :, :, None, None]
+    print(43)
+    print(k.shape)
     ER_t = torch.tile(k, (batchSize, 1, 1, 1, Nx, Ny))
+    print(44)
     ER_t = ER_t.type(torch.complex64)
+    print("Finishing")
     return ER_t, UR_t
 
 
@@ -99,7 +108,7 @@ def generate_layered_metasurface(h, params):
     # Cast to complex for subsequent calculations.
     ER_t = ER_t.type(torch.complex64)
     UR_t = UR_t.type(torch.complex64)
-
+    print("Generated")
     return ER_t, UR_t
 
 
@@ -208,10 +217,13 @@ def get_substrate_layer(params):
 def init_metasurface(params, initial_heights = None):
     optimization_shape = (100, 100)
     if initial_heights is None:
+        print("OUT") #TODO: deal with initial_heights vs initial_k confusion
         assert params['enable_random_init']
-        return torch.rand(size = (params['pixelsX'], params['pixelsY'], params['Nlay']), dtype = torch.float32)
+        return torch.rand(100, dtype = torch.float32) * 2 - 1
     else:
-        assert [int(x) for x in initial_heights.size()] == (100, 100) and not params['enable_random_init']
+        print("ERROR: THIS SECTION NEEDS TO BE FIXED")
+        exit()
+        assert [int(x) for x in initial_heights.size()] == optimization_shape and not params['enable_random_init']
         return initial_heights.float()
 
 
@@ -339,6 +351,60 @@ def evaluate_solution(focal_plane, params):
     eval_score = torch.sum(torch.abs(focal_plane[0, index-r:index+r, index-r:index+r]) )
 
     return float(eval_score)
+
+def _optimize_device(user_params):
+    params = solver_pt.initialize_params(wavelengths=user_params['wavelengths'],
+                                  thetas=user_params['thetas'],
+                                  phis=user_params['phis'],
+                                  pte=user_params['pte'],
+                                  ptm=user_params['ptm'],
+                                  pixelsX=user_params['pixelsX'],
+                                  pixelsY=user_params['pixelsY'],
+                                  erd=user_params['erd'],
+                                  PQ=user_params['PQ'],
+                                  Lx=user_params['Lx'],
+                                  Ly=user_params['Ly'],
+                                  L=user_params['L'],
+                                  Nx=16,
+                                  eps_min=1.0,
+                                  eps_max=user_params['erd'])
+    params['N'] = user_params['N']
+    params['sigmoid_coeff'] = user_params['sigmoid_coeff']
+    params['sigmoid_update'] = user_params['sigmoid_update']
+    params['learning_rate'] = user_params['learning_rate']
+    params['enable_random_init'] = user_params['enable_random_init']
+    params['enable_debug'] = user_params['enable_debug']
+    params['enable_print'] = user_params['enable_print']
+    params['enable_logging'] = user_params['enable_logging']
+    params['initial_k'] = user_params['initial_k']
+    params['err'] = False
+    params['f'] = user_params['f'] * 1E-9
+    params['upsample'] = user_params['upsample']
+    params['propagator'] = solver_pt.make_propagator(params, params['f'])
+    params['input'] = solver_pt.define_input_fields(params)
+    params['loss_function'] = user_params['loss_function']
+    k = torch.autograd.Variable(init_metasurface(params), requires_grad = True)
+    print(f"This is the shape of k: {k.shape}")
+    generator = net.Generator()
+    print("Generator")
+    opt = torch.optim.Adam(generator.parameters(), lr = params['learning_rate'])
+    print("Optimizer")
+    N = params['N']
+    loss = []
+    for epoch in range(N):
+        if params['enable_print']: print(str(epoch) + ', ', end = '')
+        print(epoch)
+        opt.zero_grad()
+        print("Zeroed")
+        values = torch.clamp(generator(k, params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
+        print("this is the shape of the values", values.shape)
+        l = params['loss_function'](values, params)
+        print("loss finished")
+        l.backward()
+        opt.step()
+        loss.append(l)
+        params['sigmoid_coeff'] += (params['sigmoid_update'] / params['N'])
+    print(f"This is the loss over time: {loss}") # TODO: deal with remaining generator
 
 def optimize_device(user_params):
     '''

@@ -51,6 +51,7 @@ rx = int(p['Lx'] * p['pixelsX'])
 ry = int(p['Ly'] * p['pixelsY'])
 def loss_function(k, params):
     ER_t, UR_t = solver_metasurface.generate_scaled_metasurface(k, params)
+    print("Generated metasurface")
     outputs = solver.simulate_allsteps(ER_t, UR_t, params)
     field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0]
     focal_plane = solver.propagate(params['input'] * field, params['propagator'], params['upsample'])

@@ -7,7 +7,6 @@
     - Upsample is artificially set to 1? Done in initialize_params, changing it
     - L is layer thickness in nanometers--total comes out to half a micrometer
 '''
-use_GPU = False
 from sys import path
 path.append('../src/')
 path.append('../rcwa_pt/src/')
@@ -24,6 +23,8 @@ p['enable_print'] = True
 p['pixelsX'] = 100
 p['pixelsY'] = 1
 p['N'] = 1000
+p['sigmoid_update'] = 10
+p['learning_rate'] = 0.01
 p['parameter_string'] = 'N' + str(p['N']) + '-sigmoid_update' + str(p['sigmoid_update']) + '-learning_rate' + str(p['learning_rate'])
 step = 10
 wavelengths = np.arange(400, 600 + step, step = step)/1000.0
@@ -45,9 +46,16 @@ p['upsample'] = 2
 p['sigmoid_coeff'] = 0.1
 p['enable_random_init'] = p['enable_debug'] = p['enable_print'] = p['enable_timing'] = p['enable_logging'] = True
 def loss_function(k, params):
-    ER_t, UR_t = solver_metasurface_pt.generate_scaled_metasurface(k, params)
-    outputs = solver_pt.simulate_allsteps(ER_t, UR_t, params)
-    field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0]
+    ER_t, UR_t = solver_metasurface_pt.generate_metasurface(k, params)
+    print("Generated metasurface")
+    outputs = solver_pt.simulate(ER_t, UR_t, params)
+    print("Started simulation")
+    field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0] #TODO: understand why we're taking the 4 in the answer even in the working solution
+    print("Building propagator")
     focal_plane = solver_pt.propagate(params['input'] * field, params['propagator'], params['upsample'])
     p = torch.sum(-torch.abs(focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
     return torch.tensordot(determinator, p.double(), dims = 1)
+p['loss_function'] = loss_function
+p['wavelengths'] = wavelengths
+k, loss, params, focal_plane = solver_metasurface_pt._optimize_device(p)
+print(loss)

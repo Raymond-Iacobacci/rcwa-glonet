@@ -146,7 +146,7 @@ def initialize_params(wavelengths = [632.0],
   params['er1'] = 1.0 # permittivity in reflection region
   params['ur2'] = 1.0 # permeability in transmission region
   params['er2'] = 1.0 # permittivity in transmission region
-  params['urd'] = 1.0 # permeability of device
+  params['urd'] = 1.0 # permeability of Device # TODO: change to variable
   params['erd'] = erd # permittivity of device
   params['urs'] = 1.0 # permeability of substrate
   params['ers'] = ers # permittivity of substrate
@@ -190,7 +190,7 @@ def initialize_params(wavelengths = [632.0],
   return params
 
 
-def make_propagator(params, f):
+def make_propagator(params, f): #NOTE: should be cleared
   '''
     Pre-computes the band-limited angular spectrum propagator for modelling
     free-space propagation for the distance and sampling as specified in `params`.
@@ -210,28 +210,36 @@ def make_propagator(params, f):
   batchSize = params['batchSize']
   pixelsX = params['pixelsX']
   pixelsY = params['pixelsY']
-  upsample = params['upsample']
 
   # Propagator definition.
   k = 2 * np.pi / params['lam0'][:, 0, 0, 0, 0, 0]
   k = k[:, None, None]
-  samp = params['upsample'] * pixelsX
-  k = torch.tile(k, (1, 2 * samp - 1, 2 * samp - 1))
-  k = k.type(torch.complex64)  
-  k_xlist_pos = 2 * np.pi * np.linspace(0, 1 / (2 *  params['Lx'] / params['upsample']), samp)  
-  front = k_xlist_pos[-(samp - 1):]
+  sampX = params['upsample'] * pixelsX
+  sampY = params['upsample'] * pixelsY
+  k = torch.tile(k, (1, 2 * sampX - 1, 2 * sampY - 1))
+  k = k.type(torch.complex64)
+  k_xlist_pos = 2 * np.pi * np.linspace(0, 1 / (2 *  params['Lx'] / params['upsample']), sampX)
+  front = k_xlist_pos[-(sampX - 1):]
   front = -front[::-1]
   k_xlist = torch.tensor(np.hstack((front, k_xlist_pos)), dtype = torch.float32)
-  k_x = torch.kron(k_xlist, torch.ones((2 * samp - 1, 1)))
+  k_x = torch.kron(k_xlist, torch.ones((2 * sampY - 1, 1)))
   k_x = k_x[None, :, :]
-  k_y = torch.permute(k_x, (0, 2, 1))
   k_x = k_x.type(torch.complex64)
   k_x = torch.tile(k_x, (batchSize, 1, 1))
+
+  k_ylist_pos = 2 * np.pi * np.linspace(0, 1 / (2 *  params['Ly'] / params['upsample']), sampY)
+  front = k_ylist_pos[-(sampY - 1):]
+  k_ylist = torch.tensor(np.hstack((front, k_ylist_pos)), dtype = torch.float32)
+  k_y = torch.kron(k_ylist, torch.ones((2 * sampX - 1, 1)))
+  k_y = k_y[None, :, :]
   k_y = k_y.type(torch.complex64)
   k_y = torch.tile(k_y, (batchSize, 1, 1))
+
+  k_x = torch.transpose(k_x, dim0 = 2, dim1 = 1)
+
   k_z_arg = torch.square(k) - (torch.square(k_x) + torch.square(k_y))
   k_z = torch.sqrt(k_z_arg)
-  
+
   # Cast to double precision to accommodate long focal lengths.
   propagator_arg = 1j * k_z * f
   propagator = torch.exp(propagator_arg)
@@ -239,15 +247,15 @@ def make_propagator(params, f):
   # Limit transfer function bandwidth to prevent aliasing.
   kx_limit = 2 * np.pi * (((1 / (pixelsX * params['Lx'])) * f) ** 2 + 1) ** (-0.5) / params['lam0'][:, 0, 0, 0, 0, 0]
   kx_limit = kx_limit.type(torch.complex64)
-  ky_limit = kx_limit
+  ky_limit = 2 * np.pi * (((1 / (pixelsY * params['Ly'])) * f) ** 2 + 1) ** (-0.5) / params['lam0'][:, 0, 0, 0, 0, 0]
   kx_limit = kx_limit[:, None, None]
   ky_limit = ky_limit[:, None, None]
 
   # Apply the antialiasing filter.
   ellipse_kx = torch.real(torch.square(k_x / kx_limit) + torch.square(k_y / k)) <= 1
-  ellipse_ky = torch.real(torch.square(k_x / k) + torch.square(k_y / ky_limit)) <= 1   
+  ellipse_ky = torch.real(torch.square(k_x / k) + torch.square(k_y / ky_limit)) <= 1
   propagator = propagator * ellipse_kx * ellipse_ky
-  
+
   return propagator
 
 
@@ -273,8 +281,8 @@ def propagate(field, propagator, upsample):
         params['upsample'] * pixelsY)` and dtype `torch.complex64` specifying the 
         the electric fields at the output plane.
   '''
-  batchSize, _, m = field.shape
-  n = upsample * m
+  batchSize, mx, my = field.shape
+  nx,ny = upsample * mx, upsample * my
 
   field_real = torch.real(field)
   field_imag = torch.imag(field)
@@ -282,22 +290,23 @@ def propagate(field, propagator, upsample):
   # Add an extra channels dimension for torch.nn.interpolate, and remove afterwards.
   field_real = field_real[None, :, :, :]
   field_imag = field_imag[None, :, :, :]
-  field_real = torch.nn.functional.interpolate(field_real, size=[n,n], mode='nearest')
-  field_imag = torch.nn.functional.interpolate(field_imag, size=[n,n], mode='nearest')
+  field_real = torch.nn.functional.interpolate(field_real, size=[nx,ny], mode='nearest')
+  field_imag = torch.nn.functional.interpolate(field_imag, size=[nx,ny], mode='nearest')
   field_real = field_real[0, :, :, :]
   field_imag = field_imag[0, :, :, :]
   field = field_real.type(torch.complex64) + 1j * field_imag.type(torch.complex64)
 
-  # To pad total image to have dimension 2n - 1, have to pad with (n-1)/2 on each side.
-  field = torch.nn.functional.pad(field, [(n-1) // 2, -((n-1) // -2), (n-1) // 2, -((n-1) // -2)])
-
+  # # To pad total image to have dimension 2n - 1, have to pad with (n-1)/2 on each side.
+  # field = torch.nn.functional.pad(field, [(n-1) // 2, -((n-1) // -2), (n-1) // 2, -((n-1) // -2)]) # NOTE: this appears to be used for making sure it's square for the propagation step--that has been handled and is a memory reduction (linear) in terms of compute-points
+  print("This is the fft step")
   # Apply the propagator in Fourier space.
   field_freq = torch.fft.fftshift(torch.fft.fft2(field), dim = (1,2))
+  print("these are the shapes of the multiplication", field_freq.shape,propagator.shape)
   field_filtered = torch.fft.ifftshift(field_freq * propagator, dim = (1,2))
   out = torch.fft.ifft2(field_filtered)
     
   # Crop back down to n x n matrices.
-  out = out[:, (n-1) // 2 : n-1-((n-1) // -2), (n-1) // 2 : n-1-((n-1) // -2)]
+  # out = out[:, (n-1) // 2 : n-1-((n-1) // -2), (n-1) // 2 : n-1-((n-1) // -2)]
 
   return out
 
