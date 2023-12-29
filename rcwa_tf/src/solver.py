@@ -970,6 +970,7 @@ def propagate(field, propagator, upsample):
   # Put batch parameter last for padding then transpose back.
   # _, _, m = field.shape
   _, mx, my = field.shape
+  print("In gpov3 this is te field shape:",field.shape)
   # print(f"This is the field shape before anything happens--at least this should be correct, then we can easily change what happens in the next 8 lines: {field.shape}")
   # n = upsample * m
   nx, ny = upsample * mx, upsample * my
@@ -1008,6 +1009,7 @@ def propagate(field, propagator, upsample):
   field_freq = tf.signal.fftshift(tf.signal.fft2d(field), axes = (1, 2))
   # print(f"This is the propagator shape: {propagator.shape}, and this is the field_freq shape: {field_freq.shape}")
   multiplication_step = field_freq * propagator # NOTE this is just the multiplication step, don't worry about the value being useless
+  print("these are the shapes of the multiplication", field_freq.shape,propagator.shape)
   field_filtered = tf.signal.ifftshift(field_freq * propagator, axes = (1, 2))
   out = tf.signal.ifft2d(field_filtered)
 
@@ -1035,6 +1037,7 @@ def define_input_fields(params):
   '''
 
   # Define the cartesian cross section.
+  print("begin:",params['pixelsX'],params['pixelsY'])
   pixelsX = params['pixelsX']
   pixelsY = params['pixelsY']
   dx = params['Lx'] # grid resolution along x
@@ -1065,7 +1068,7 @@ def define_input_fields(params):
   phase_def = 2 * np.pi * np.sin(theta_phase_test) * x_mesh / lam_phase_test
   
   phase_def = tf.cast(phase_def, dtype = tf.complex64)
-
+  print("end:",phase_def.shape)
   return tf.exp(1j * phase_def)
 
 
@@ -1469,6 +1472,7 @@ def simulate(ER_t, UR_t, params = initialize_params()):
   outputs['REF'] = REF
   outputs['tx'] = tx
   outputs['ty'] = ty
+  print(f"This is the transmitted output shape that we are looking for: {ty.shape}")
   outputs['tz'] = tz
   outputs['T'] = T
   outputs['TRN'] = TRN

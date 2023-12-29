@@ -54,6 +54,7 @@ def loss_function(k, params):
     print("Generated metasurface")
     outputs = solver.simulate_allsteps(ER_t, UR_t, params)
     field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0]
+    print("This is the field shape frm the other run:",field.shape)
     focal_plane = solver.propagate(params['input'] * field, params['propagator'], params['upsample'])
     indexX = (params['pixelsX'] * params['upsample']) // 2
     indexY = (params['pixelsY'] * params['upsample']) // 2

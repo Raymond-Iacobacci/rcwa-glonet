@@ -382,6 +382,7 @@ def _optimize_device(user_params):
     params['upsample'] = user_params['upsample']
     params['propagator'] = solver_pt.make_propagator(params, params['f'])
     params['input'] = solver_pt.define_input_fields(params)
+    print(params['input'].shape)
     params['loss_function'] = user_params['loss_function']
     k = torch.autograd.Variable(init_metasurface(params), requires_grad = True)
     print(f"This is the shape of k: {k.shape}")
@@ -399,7 +400,7 @@ def _optimize_device(user_params):
         values = torch.clamp(generator(k, params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
         print("this is the shape of the values", values.shape)
         l = params['loss_function'](values, params)
-        print("loss finished")
+        print("loss finished", l)
         l.backward()
         opt.step()
         loss.append(l)
