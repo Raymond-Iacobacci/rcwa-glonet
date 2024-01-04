@@ -26,7 +26,6 @@ import solver_pt
 import rcwa_utils_pt
 
 def generate_metasurface(k, params):    # NOTE: no substrate layer is added, this is taking exceptionally long for some reason...????
-    print("Beginning")
     batchSize = params['batchSize']
     pixelsX = params['pixelsX']
     pixelsY = params['pixelsY']
@@ -35,18 +34,11 @@ def generate_metasurface(k, params):    # NOTE: no substrate layer is added, thi
     Ny = params['Ny']
     materials_shape = (batchSize, pixelsX, pixelsY, Nlay, Nx, Ny)
     UR_t = params['urd'] * torch.ones(materials_shape)
-    print("Case")
     UR_t = UR_t.type(torch.complex64)
-    print("Cast")
-    k = torch.clamp(k, min = 0, max = 1)
-    print(42)
+    k = torch.clamp(k, min = 1, max = params['erd'])
     k = k[None, :, :, :, None, None]
-    print(43)
-    print(k.shape)
     ER_t = torch.tile(k, (batchSize, 1, 1, 1, Nx, Ny))
-    print(44)
     ER_t = ER_t.type(torch.complex64)
-    print("Finishing")
     return ER_t, UR_t
 
 
@@ -89,11 +81,7 @@ def generate_layered_metasurface(h, params):
     h = torch.clamp(h, min = 0, max = Nlay-1) 
     
     # Convert height representation of to stacked representation.
-    # print(f"This is the shape of h: {h.shape}")
-    # print(f"This is h: {h}")
     z = diff_height_to_stacked(h, params)
-    # print(f"This is the shape of z: {z.shape}")
-    # print(f"This is z: {z}")
     
     # Repeat entries in z so that it has the shape
     # (batchSize, pixelsX, pixelsY, 1, Nx, Ny).
@@ -108,7 +96,6 @@ def generate_layered_metasurface(h, params):
     # Cast to complex for subsequent calculations.
     ER_t = ER_t.type(torch.complex64)
     UR_t = UR_t.type(torch.complex64)
-    print("Generated")
     return ER_t, UR_t
 
 
@@ -149,7 +136,6 @@ def diff_height_to_stacked(h, params):
                                   coeff=params['sigmoid_coeff'],
                                   offset=Nlay-2-i,
                                   output_scaling = [params['eps_min'],params['eps_max']]) for i in range(Nlay-1) ] )
-    print(f"This is where the issue occurs with z's shape: {z.shape}")
     return torch.permute(z, [1,2,0])
 
 
@@ -221,8 +207,6 @@ def init_metasurface(params, initial_heights = None):
         assert params['enable_random_init']
         return torch.rand(100, dtype = torch.float32) * 2 - 1
     else:
-        print("ERROR: THIS SECTION NEEDS TO BE FIXED")
-        exit()
         assert [int(x) for x in initial_heights.size()] == optimization_shape and not params['enable_random_init']
         return initial_heights.float()
 
@@ -382,24 +366,18 @@ def _optimize_device(user_params):
     params['upsample'] = user_params['upsample']
     params['propagator'] = solver_pt.make_propagator(params, params['f'])
     params['input'] = solver_pt.define_input_fields(params)
-    print(params['input'].shape)
     params['loss_function'] = user_params['loss_function']
     k = torch.autograd.Variable(init_metasurface(params), requires_grad = True)
-    print(f"This is the shape of k: {k.shape}")
     generator = net.Generator()
-    print("Generator")
     opt = torch.optim.Adam(generator.parameters(), lr = params['learning_rate'])
-    print("Optimizer")
     N = params['N']
     loss = []
     for epoch in range(N):
         if params['enable_print']: print(str(epoch) + ', ', end = '')
         print(epoch)
         opt.zero_grad()
-        print("Zeroed")
         values = torch.clamp(generator(k, params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
-        print("this is the shape of the values", values.shape)
-        l = params['loss_function'](values, params)
+        l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params)
         print("loss finished", l)
         l.backward()
         opt.step()

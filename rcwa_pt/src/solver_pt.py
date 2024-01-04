@@ -282,9 +282,7 @@ def propagate(field, propagator, upsample):
         the electric fields at the output plane.
   '''
   batchSize, mx, my = field.shape
-  print("this is the field shape", field.shape)
   nx,ny = upsample * mx, upsample * my
-  print("These are nx and ny",upsample,nx,ny)
   field_real = torch.real(field)
   field_imag = torch.imag(field)
 
@@ -299,10 +297,8 @@ def propagate(field, propagator, upsample):
 
   # To pad total image to have dimension 2n - 1, have to pad with (n-1)/2 on each side.
   field = torch.nn.functional.pad(field, [(ny-1) // 2, -((ny-1) // -2), (nx-1) // 2, -((nx-1) // -2)]) # NOTE: this appears to be used for making sure it's square for the propagation step--that has been handled and is a memory reduction (linear) in terms of compute-points
-  print("This is the fft step")
   # Apply the propagator in Fourier space.
   field_freq = torch.fft.fftshift(torch.fft.fft2(field), dim = (1,2))
-  print("these are the shapes of the multiplication", field_freq.shape,propagator.shape)
   field_filtered = torch.fft.ifftshift(field_freq * propagator, dim = (1,2))
   out = torch.fft.ifft2(field_filtered)
     
@@ -326,7 +322,6 @@ def define_input_fields(params):
   '''
 
   # Define the cartesian cross section.
-  print("begin:",params['pixelsX'],params['pixelsY'])
   pixelsX = params['pixelsX']
   pixelsY = params['pixelsY']
   dx = params['Lx'] # grid resolution along x
@@ -348,7 +343,6 @@ def define_input_fields(params):
   # Apply a linear phase ramp based on the wavelength and thetas.
   phase_def = 2 * np.pi * torch.sin(theta_phase_test) * x_mesh / lam_phase_test
   phase_def = phase_def.type(torch.complex64)
-  print("end:",phase_def.shape)
   return torch.exp(1j * phase_def)
 
 
@@ -379,7 +373,6 @@ def simulate(ER_t, UR_t, params):
   batchSize = params['batchSize']
   pixelsX = params['pixelsX']
   pixelsY = params['pixelsY']
-  print("These are the pixel sizes ERROR:", pixelsX, pixelsY)
   L = params['L']
   Nlay = params['Nlay']
   Lx = params['Lx']
@@ -394,7 +387,6 @@ def simulate(ER_t, UR_t, params):
   ur1 = params['ur1']
   ur2 = params['ur2']
   PQ = params['PQ']
-  
   ### Step 1: Build convolution matrices for the permittivity and permeability ###
   ERC = rcwa_utils_pt.convmat(ER_t, PQ[0], PQ[1])
   URC = rcwa_utils_pt.convmat(UR_t, PQ[0], PQ[1])
@@ -772,7 +764,6 @@ def simulate(ER_t, UR_t, params):
   outputs['REF'] = REF
   outputs['tx'] = tx
   outputs['ty'] = ty
-  print(f"This is the transmitted output shape that we are looking for: {ty.shape}")
   outputs['tz'] = tz
   outputs['T'] = T
   outputs['TRN'] = TRN

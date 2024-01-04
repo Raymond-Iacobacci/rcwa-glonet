@@ -47,17 +47,11 @@ p['sigmoid_coeff'] = 0.1
 p['enable_random_init'] = p['enable_debug'] = p['enable_print'] = p['enable_timing'] = p['enable_logging'] = True
 def loss_function(k, params):
     ER_t, UR_t = solver_metasurface_pt.generate_metasurface(k, params)
-    print("Generated metasurface",ER_t.shape,UR_t.shape)
     outputs = solver_pt.simulate(ER_t, UR_t, params)
-    print("Started simulation")
     field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0] #TODO: understand why we're taking the 4 in the answer even in the working solution
-    print(f"This is the field shape: {field.shape}")
-    print("Building propagator")
     p=params['input'] * field
-    print(f"This s the nex tshape: {p.shape}, {field.shape}")
     focal_plane = solver_pt.propagate(params['input'] * field, params['propagator'], params['upsample'])
     p = torch.sum(-torch.abs(focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
-    print(p.type())
     return torch.tensordot(determinator.type(p.type()), p, dims = 1)
 p['loss_function'] = loss_function
 p['wavelengths'] = wavelengths
