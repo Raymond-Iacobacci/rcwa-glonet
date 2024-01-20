@@ -20,15 +20,15 @@ if use_GPU:
     utils.config_gpu_memory_usage()
 p = {}
 p['enable_print'] = True
-p['pixelsX'] = 100
-p['pixelsY'] = 1
+p['pixelsX'] = 20
+p['pixelsY'] = 20
 p['N'] = 1000
 p['sigmoid_update'] = 10
 p['learning_rate'] = 0.01
 p['parameter_string'] = 'N' + str(p['N']) + '-sigmoid_update' + str(p['sigmoid_update']) + '-learning_rate' + str(p['learning_rate'])
 step = 10
 wavelengths = np.arange(400, 600 + step, step = step)/1000.0
-passthrough_band_indices = [9,10,11]
+passthrough_band_indices = [10]
 determinator = np.array([-1/(len(wavelengths) - len(passthrough_band_indices))] * len(wavelengths))
 determinator[passthrough_band_indices] = 1/len(passthrough_band_indices)
 determinator = torch.tensor(determinator, dtype = torch.float32) # TODO: check if 'dtype' makes the difference when initializing tensors to run on the GPU architecture
@@ -38,7 +38,7 @@ p['pte'] = deepcopy(p['thetas']) + 1
 p['ptm'] = deepcopy(p['thetas'])
 p['Lx'] = p['Ly'] = 100 # Nanometers, Ly left in because we might expand in that direction eventually
 p['erd'] = 3.4 # Edit from ers
-p['L'] = np.zeros(shape = (100,)) + 5.0
+p['L'] = np.zeros(shape = (3,)) + 5.0
 p['f'] = 1e9
 p['initial_k'] = np.zeros(shape = (p['L'].shape[0], p['pixelsX'], p['pixelsY'])) + 2.7
 p['PQ'] = [3, 3]
@@ -46,12 +46,13 @@ p['upsample'] = 2
 p['sigmoid_coeff'] = 0.1
 p['enable_random_init'] = p['enable_debug'] = p['enable_print'] = p['enable_timing'] = p['enable_logging'] = True
 def loss_function(k, params):
+    print("Initializing a loss function simulation")
     ER_t, UR_t = solver_metasurface_pt.generate_metasurface(k, params)
     outputs = solver_pt.simulate(ER_t, UR_t, params)
     field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0] #TODO: understand why we're taking the 4 in the answer even in the working solution
-    p=params['input'] * field
     focal_plane = solver_pt.propagate(params['input'] * field, params['propagator'], params['upsample'])
-    p = torch.sum(-torch.abs(focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
+    p = torch.sum(torch.abs(focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
+    print(f"Overall loss: {p}")
     return torch.tensordot(determinator.type(p.type()), p, dims = 1)
 p['loss_function'] = loss_function
 p['wavelengths'] = wavelengths

@@ -203,7 +203,7 @@ def get_substrate_layer(params):
 def init_metasurface(params, initial_heights = None):
     optimization_shape = (100, 100)
     if initial_heights is None:
-        print("OUT") #TODO: deal with initial_heights vs initial_k confusion
+        # print("OUT") #TODO: deal with initial_heights vs initial_k confusion
         assert params['enable_random_init']
         return torch.rand(100, dtype = torch.float32) * 2 - 1
     else:
@@ -367,23 +367,36 @@ def _optimize_device(user_params):
     params['propagator'] = solver_pt.make_propagator(params, params['f'])
     params['input'] = solver_pt.define_input_fields(params)
     params['loss_function'] = user_params['loss_function']
-    k = torch.autograd.Variable(init_metasurface(params), requires_grad = True)
+    n_images = 20
+    angles = torch.linspace(-30, 30, steps = 13)
+    k_array = [torch.autograd.Variable(init_metasurface(params), requires_grad = True) for i in range(n_images)]
     generator = net.Generator()
     opt = torch.optim.Adam(generator.parameters(), lr = params['learning_rate'])
     N = params['N']
-    loss = []
+    # loss = []
     for epoch in range(N):
         if params['enable_print']: print(str(epoch) + ', ', end = '')
-        print(epoch)
         opt.zero_grad()
-        values = torch.clamp(generator(k, params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
-        l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params)
-        print("loss finished", l)
-        l.backward()
+        for image_num in range(n_images):
+            for angle in angles:
+                params['phis'] = angle
+                print(f"Epoch: {epoch}, iteration: {image_num}, angle: {angle}")
+                values = torch.clamp(generator(k_array[image_num], params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
+                l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params)
+                torch.save(l, '../storage_{image_num}_{angle}.pt')
+                print(f"This is the loss: {l}")
+                del l
+        l_val = torch.tensor(0.)
+        for i in range(n_images):
+            for j in angles:
+                loss_on_ram = torch.load('../storage_{i}_{j}.pt')
+                l_val.add_(loss_on_ram)
+                del loss_on_ram
+        l_result = l_val / (n_images * n_angles)
+        l_result.backward()
         opt.step()
-        loss.append(l)
         params['sigmoid_coeff'] += (params['sigmoid_update'] / params['N'])
-    print(f"This is the loss over time: {loss}") # TODO: deal with remaining generator
+    # print(f"This is the loss over time: {loss}") # TODO: deal with remaining generator
 
 def optimize_device(user_params):
     '''
