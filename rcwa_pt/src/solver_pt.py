@@ -379,6 +379,7 @@ def simulate(ER_t, UR_t, params):
   Ly = params['Ly']
   theta = params['theta']
   phi = params['phi']
+  print(f"This is the phi: {torch.mean(phi)}")
   pte = params['pte']
   ptm = params['ptm']
   lam0 = params['lam0']
@@ -406,10 +407,12 @@ def simulate(ER_t, UR_t, params):
   k0 = 2 * np.pi / lam0
   k0 = k0.type(torch.complex64)
   
-  kinc_x0 = n1 * torch.sin(theta) * torch.cos(phi)
+  kinc_x0 = n1 * torch.cos(theta) * torch.sin(phi) # NOTE: I flipped sin and cos, not sure why it was like that before but I assume people just didn't test it
+  # print(f"This is the incoming k vector: {torch.mean(kinc_x0), kinc_x0.shape}")
   kinc_x0 = kinc_x0.type(torch.complex64)
   
   kinc_y0 = n1 * torch.sin(theta) * torch.sin(phi)
+
   kinc_y0 = kinc_y0.type(torch.complex64)
   
   kinc_z0 = n1 * torch.cos(theta)
@@ -417,8 +420,8 @@ def simulate(ER_t, UR_t, params):
   kinc_z0 = kinc_z0[:, :, :, 0, :, :]
 
   # Unit vectors
-  T1 = np.transpose([2 * np.pi / Lx, 0])
-  T2 = np.transpose([0, 2 * np.pi / Ly])
+  # T1 = np.transpose([2 * np.pi / Lx, 0]) # NOTE: they are unused here
+  # T2 = np.transpose([0, 2 * np.pi / Ly])
   p_max = np.floor(PQ[0] / 2.0)
   q_max = np.floor(PQ[1] / 2.0)
   p = torch.linspace(-p_max, p_max, PQ[0], dtype = torch.complex64) # indices along T1

@@ -379,7 +379,8 @@ def _optimize_device(user_params):
         opt.zero_grad()
         for image_num in range(n_images):
             for angle in angles:
-                params['phis'] = angle
+                params['phi'] = torch.zeros(params['phi'].shape)
+                params['phi'] += angle
                 print(f"Epoch: {epoch}, iteration: {image_num}, angle: {angle}")
                 values = torch.clamp(generator(k_array[image_num], params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
                 l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params)
@@ -392,7 +393,7 @@ def _optimize_device(user_params):
                 loss_on_ram = torch.load('../storage_{i}_{j}.pt')
                 l_val.add_(loss_on_ram)
                 del loss_on_ram
-        l_result = l_val / (n_images * n_angles)
+        l_result = l_val / (n_images * len(angles))
         l_result.backward()
         opt.step()
         params['sigmoid_coeff'] += (params['sigmoid_update'] / params['N'])
