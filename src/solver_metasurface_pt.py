@@ -384,13 +384,13 @@ def _optimize_device(user_params):
                 print(f"Epoch: {epoch}, iteration: {image_num}, angle: {angle}")
                 values = torch.clamp(generator(k_array[image_num], params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
                 l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params)
-                torch.save(l, '../storage_{image_num}_{angle}.pt')
+                torch.save(l, f'../storage_{image_num}_{angle}.pt')
                 print(f"This is the loss: {l}")
                 del l
         l_val = torch.tensor(0.)
         for i in range(n_images):
             for j in angles:
-                loss_on_ram = torch.load('../storage_{i}_{j}.pt')
+                loss_on_ram = torch.load(f'../storage_{i}_{j}.pt')
                 l_val.add_(loss_on_ram)
                 del loss_on_ram
         l_result = l_val / (n_images * len(angles))
