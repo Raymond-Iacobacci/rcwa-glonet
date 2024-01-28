@@ -369,7 +369,7 @@ def optimize_device(user_params):
     params['loss_function'] = user_params['loss_function']
     params['restore_from'] = user_params['restore_from']
     n_images = 20
-    angles = torch.linspace(-30, 30, steps = 13)
+    angles = torch.linspace(-30, 0, steps = 7)
     k_array = [torch.autograd.Variable(init_metasurface(params), requires_grad = True) for i in range(n_images)]
     generator = net.Generator()
     if params['restore_from']:
