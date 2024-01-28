@@ -56,7 +56,7 @@ p['time'] = init_dt_string
 def loss_function(k, params, image_number = None, epoch_number = None):
     ER_t, UR_t = solver_metasurface_pt.generate_metasurface(k, params)
     image_pixels = ER_t[0, :, :, :, 0, 0]
-    binarization_loss = torch.sum((image_pixels - 1.0) * (3.4 - image_pixels)/(1.7 ** 2)/(20 * 20 * 3))
+    binarization_loss = 1 - torch.sum((image_pixels - 1.0) * (3.4 - image_pixels)/(1.7 ** 2)/(20 * 20 * 3))
     outputs = solver_pt.simulate(ER_t, UR_t, params)
     if not torch.sum(params['phi']):
         torch.save(image_pixels, f'../log_{init_dt_string}/images/{image_number}_{epoch_number}.pt')
