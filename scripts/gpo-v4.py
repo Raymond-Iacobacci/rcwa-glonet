@@ -29,9 +29,9 @@ p['parameter_string'] = 'N' + str(p['N']) + '-sigmoid_update' + str(p['sigmoid_u
 step = 10
 wavelengths = np.arange(400, 600 + step, step = step)/1000.0
 passthrough_wavelength_index = 10
-determinator = -np.concatenate((np.arange(0, passthrough_wavelength_index + 1, dtype = np.float64), np.arange(passthrough_wavelength_index - 1, -1, -1, dtype = np.float64)))
+determinator = - np.arange(1, passthrough_wavelength_index + 1, dtype = np.float64)
 determinator[passthrough_wavelength_index] = 50
-determinator -= np.mean(determinator) # No bias traps
+determinator -= np.mean(determinator) # No 0-bias traps
 determinator /= determinator[passthrough_wavelength_index] # Normal scaling
 determinator = torch.tensor(determinator, dtype = torch.float32) # TODO: check if 'dtype' makes the difference when initializing tensors to run on the GPU architecture
 p['thetas'] = np.zeros(len(wavelengths), dtype = 'float32')
@@ -47,7 +47,7 @@ p['PQ'] = [3, 3]
 p['upsample'] = 2
 p['sigmoid_coeff'] = 0.1
 p['enable_random_init'] = p['enable_debug'] = p['enable_print'] = p['enable_timing'] = p['enable_logging'] = True
-copy_dt_string = '26:01:2024-13:49'
+copy_dt_string = ''
 p['restore_from'] = copy_dt_string
 from datetime import datetime
 init_now = datetime.now()
@@ -59,7 +59,10 @@ def loss_function(k, params):
     outputs = solver_pt.simulate(ER_t, UR_t, params)
     field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0] #TODO: understand why we're taking the 4 in the answer even in the working solution
     focal_plane = solver_pt.propagate(params['input'] * field, params['propagator'], params['upsample'])
-    p = torch.sum(torch.abs(focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
+    print(f'This is the focal plane: {focal_plane.shape}')
+    reflected_focal_plane = torch.flip(focal_plane, 1)
+    symmetric_focal_plane = focal_plane + reflected_focal_plane
+    p = torch.sum(torch.abs(symmetric_focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
     with open(f'loss_{init_dt_string}/wavelength_loss.txt', 'a+') as f:
         f.write(str(p.cpu().detach().numpy()))
         f.write('\n')
