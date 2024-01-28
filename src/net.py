@@ -8,4 +8,4 @@ class Generator(nn.Module):
     def forward(self, ipt, binary_amp):
         ipt = self.fc(ipt.view(-1))
         ipt = self.fc2(ipt)
-        return tanh(ipt * (1 + binary_amp)).view(20, 20, 3)
+        return tanh(ipt * binary_amp).view(20, 20, 3)
