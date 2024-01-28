@@ -69,7 +69,7 @@ def loss_function(k, params, image_number = None, epoch_number = None):
     with open(f'../log_{init_dt_string}/loss/wavelength_loss.txt', 'a+') as f:
         f.write(str(p.cpu().detach().numpy()))
         f.write('\n')
-    return torch.tensordot(determinator.type(p.type()), p, dims = 1) # Need a binarization coefficient
+    return torch.tensordot(determinator.type(p.type()), p, dims = 1)
 p['loss_function'] = loss_function
 p['wavelengths'] = wavelengths
 k, loss, params, focal_plane = solver_metasurface_pt.optimize_device(p)
