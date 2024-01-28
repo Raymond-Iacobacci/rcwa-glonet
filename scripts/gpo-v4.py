@@ -59,14 +59,14 @@ def loss_function(k, params, image_number = None, epoch_number = None):
     binarization_loss = torch.sum((image_pixels - 1.0) * (3.4 - image_pixels)/(1.7 ** 2)/(20 * 20 * 3))
     outputs = solver_pt.simulate(ER_t, UR_t, params)
     if not torch.sum(params['phi']):
-        torch.save(image_pixels, f'images_{init_dt_string}/{image_number}_{epoch_number}.pt')
+        torch.save(image_pixels, f'../log_{init_dt_string}/images/{image_number}_{epoch_number}.pt')
         print(f"Binarization: {np.real(binarization_loss.cpu().detach().numpy())}")
     field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0] #TODO: understand why we're taking the 4 in the answer even in the working solution
     focal_plane = solver_pt.propagate(params['input'] * field, params['propagator'], params['upsample'])
     reflected_focal_plane = torch.flip(focal_plane, [1])
     symmetric_focal_plane = focal_plane + reflected_focal_plane
     p = torch.sum(torch.abs(symmetric_focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
-    with open(f'loss_{init_dt_string}/wavelength_loss.txt', 'a+') as f:
+    with open(f'../log_{init_dt_string}/loss/wavelength_loss.txt', 'a+') as f:
         f.write(str(p.cpu().detach().numpy()))
         f.write('\n')
     return torch.tensordot(determinator.type(p.type()), p, dims = 1) # Need a binarization coefficient
