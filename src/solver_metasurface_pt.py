@@ -374,17 +374,19 @@ def optimize_device(user_params):
     generator = net.Generator()
     if params['restore_from']:
         print(f'''Loading from prior state: {params['restore_from']}''')
-        generator.load_state_dict(torch.load(f'''../models/{params['restore_from']}.pt''')) # Need to input loading for images, but logging has not finished yet
+        generator.load_state_dict(torch.load(f'''../log_{init_dt_string}/models/{params['restore_from']}.pt''')) # Need to input loading for images, but logging has not finished yet
     opt = torch.optim.Adam(generator.parameters(), lr = params['learning_rate']) # Not tracking images yet, will start soon
     N = params['N']
     loss = []
     init_dt_string = user_params['time']
     from os import system
-    system(f'mkdir loss_{init_dt_string}')
-    system(f'mkdir storage_{init_dt_string}')
-    system(f'mkdir values_{init_dt_string}')
-    system(f'mkdir storage_spread_{init_dt_string}')
-    system(f'mkdir image_backup_{init_dt_string}')
+    system(f'mkdir ../log_{init_dt_string}/loss')
+    system(f'mkdir ../log_{init_dt_string}/storage')
+    system(f'mkdir ../log_{init_dt_string}/values_{init_dt_string}')
+    system(f'mkdir ../log_{init_dt_string}/storage_spread')
+    system(f'mkdir ../log_{init_dt_string}/image_backup')
+    system(f'mkdir ../log_{init_dt_string}/images')
+    system(f'mkdir ../log_{init_dt_string}/models')
     bias = 5
     n_ref = 2
     big_refresh = 20
@@ -397,21 +399,21 @@ def optimize_device(user_params):
         opt.zero_grad()
         epoch_loss = []
         for image_num in range(n_images):
-            torch.save(k_array[image_num], f'image_backup_{init_dt_string}/{image_num}.pt')
+            torch.save(k_array[image_num], f'../log_{init_dt_string}/image_backup/{image_num}.pt')
             values = torch.clamp(generator(k_array[image_num], params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
             image_loss = []
             for angle in angles:
                 params['phi'] = torch.zeros(params['phi'].shape)
                 params['phi'] += angle
                 print(f"\nEpoch: {epoch}, iteration: {image_num}, angle: {angle}")
-                l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params)
+                l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params, image_number = image_num, epoch_number = epoch)
                 if angle == 0:
-                    with open(f'values_{init_dt_string}/values_{image_num}.txt', 'a+') as f:
+                    with open(f'../log_{init_dt_string}/values/values_{image_num}.txt', 'a+') as f:
                         f.write(str(values))
                         f.write('\n')
-                torch.save(l, f'storage_{init_dt_string}/storage_{image_num}_{angle}.pt') # This is still good practice because of the relative length of time of the simulation process
+                torch.save(l, f'../log_{init_dt_string}/storage/storage_{image_num}_{angle}.pt') # This is still good practice because of the relative length of time of the simulation process
                 image_loss.append(l.cpu().detach().numpy())
-                with open(f'loss_{init_dt_string}/angle_loss.txt', 'a+') as f:
+                with open(f'../log_{init_dt_string}/loss/angle_loss.txt', 'a+') as f:
                     f.write(str(epoch))
                     f.write(', ')
                     f.write(str(image_num))
@@ -423,7 +425,7 @@ def optimize_device(user_params):
                 del l
             epoch_loss.append(np.mean(image_loss))
             print(f"This is the loss for the whole image: {np.mean(image_loss)}")
-            with open(f'loss_{init_dt_string}/image_loss.txt', 'a+') as f:
+            with open(f'../log_{init_dt_string}/loss/image_loss.txt', 'a+') as f:
                 f.write(str(epoch))
                 f.write(', ')
                 f.write(str(image_num))
@@ -449,22 +451,22 @@ def optimize_device(user_params):
         l_val = torch.tensor(0.)
         for i in range(n_images):
             for j in angles:
-                loss_on_ram = torch.load(f'storage_{init_dt_string}/storage_{i}_{j}.pt')
+                loss_on_ram = torch.load(f'../log_{init_dt_string}/storage/storage_{i}_{j}.pt')
                 l_val.add_(loss_on_ram)
                 del loss_on_ram
-                system(f'rm storage_{init_dt_string}/storage_{i}_{j}.pt')
+                system(f'rm ../log_{init_dt_string}/storage/storage_{i}_{j}.pt')
         l_result = l_val / (n_images * len(angles))
         l_result.backward()
         opt.step()
         params['sigmoid_coeff'] += (params['sigmoid_update'] / params['N'])
         loss.append(np.mean(epoch_loss))
         print(f"This is the loss for the whole epoch: {np.mean(epoch_loss)}")
-        with open(f'loss_{init_dt_string}/epoch_loss.txt', 'a+') as f:
+        with open(f'../log_{init_dt_string}/loss/epoch_loss.txt', 'a+') as f:
             f.write(str(epoch))
             f.write(', ')
             f.write(str(np.mean(epoch_loss)))
             f.write('\n')
-        torch.save(generator.state_dict(), f'../models/{init_dt_string}.pt')
+        torch.save(generator.state_dict(), f'../log_{init_dt_string}/models/{init_dt_string}.pt')
         if epoch % big_refresh == 0 and epoch:
             explore_k_array = [torch.autograd.Variable(init_metasurface(params), requires_grad = True) for i in range(big_refresh_size)]
             new_image_loss = []
@@ -475,7 +477,7 @@ def optimize_device(user_params):
                     print(f"Epoch: {epoch}, iteration: {image_num}, angle: {angle}")
                     values = torch.clamp(generator(explore_k_array[image_num], params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
                     l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params)
-                    torch.save(l, f'storage_spread_{init_dt_string}/storage_{image_num}_{angle}.pt')
+                    torch.save(l, f'../log_{init_dt_string}/storage_spread/storage_{image_num}_{angle}.pt')
                     new_image_loss.append(l.cpu().detach().numpy())
                     del l
                 new_image_loss.append(np.mean(image_loss))
@@ -485,9 +487,9 @@ def optimize_device(user_params):
             for i in expand_indices:
                 k_array[k_array_indices[n_images - i]] = explore_k_array[expand_indices[i]]
             print(f"This is the result from the random expansion: {epoch_loss}")
-    system(f'rmdir storage_{init_dt_string}')
+    system(f'rmdir ../log_{init_dt_string}/storage')
     print(f"This is the loss over time: {loss}") # TODO: deal with remaining generator
-    torch.save(generator.state_dict(), f'../models/{init_dt_string}.pt')
+    torch.save(generator.state_dict(), f'../log_{init_dt_string}/models/{init_dt_string}.pt')
 
 def _optimize_device(user_params):
     '''
