@@ -23,8 +23,8 @@ p['enable_print'] = True
 p['pixelsX'] = 20
 p['pixelsY'] = 20
 p['N'] = 1000
-p['sigmoid_update'] = 1
-p['learning_rate'] = 0.099
+p['sigmoid_update'] = 19
+p['learning_rate'] = 1
 p['parameter_string'] = 'N' + str(p['N']) + '-sigmoid_update' + str(p['sigmoid_update']) + '-learning_rate' + str(p['learning_rate'])
 step = 10
 wavelengths = np.arange(400, 600 + step, step = step)/1000.0
