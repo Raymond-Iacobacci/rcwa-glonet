@@ -381,9 +381,10 @@ def optimize_device(user_params):
     loss = []
     init_dt_string = user_params['time']
     from os import system
+    system(f'mkdir ../log_{init_dt_string}/')
     system(f'mkdir ../log_{init_dt_string}/loss')
     system(f'mkdir ../log_{init_dt_string}/storage')
-    system(f'mkdir ../log_{init_dt_string}/values_{init_dt_string}')
+    system(f'mkdir ../log_{init_dt_string}/values')
     system(f'mkdir ../log_{init_dt_string}/storage_spread')
     system(f'mkdir ../log_{init_dt_string}/image_backup')
     system(f'mkdir ../log_{init_dt_string}/images')
@@ -406,7 +407,7 @@ def optimize_device(user_params):
             for angle in angles:
                 params['phi'] = torch.zeros(params['phi'].shape)
                 params['phi'] += angle
-                print(f"\nEpoch: {epoch}, iteration: {image_num}, angle: {angle}")
+                print(f"Epoch: {epoch}, iteration: {image_num}, angle: {angle}")
                 l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params, image_number = image_num, epoch_number = epoch)
                 if angle == 0:
                     with open(f'../log_{init_dt_string}/values/values_{image_num}.txt', 'a+') as f:
