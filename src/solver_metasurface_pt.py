@@ -376,6 +376,7 @@ def optimize_device(user_params):
         print(f'''Loading from prior state: {params['restore_from']}''')
         generator.load_state_dict(torch.load(f'''../log_{init_dt_string}/models/{params['restore_from']}.pt''')) # Need to input loading for images, but logging has not finished yet
     opt = torch.optim.Adam(generator.parameters(), lr = params['learning_rate']) # Not tracking images yet, will start soon
+    # TODO: check the learning rate, likely decrease since it seems to move around?
     N = params['N']
     loss = []
     init_dt_string = user_params['time']
@@ -389,7 +390,7 @@ def optimize_device(user_params):
     system(f'mkdir ../log_{init_dt_string}/models')
     bias = 5
     n_ref = 2
-    big_refresh = 20
+    big_refresh = 15
     big_refresh_size = 100
     little_refresh = 3
     little_refresh_variance = 0.05
