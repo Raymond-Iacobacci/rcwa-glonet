@@ -379,7 +379,6 @@ def simulate(ER_t, UR_t, params):
   Ly = params['Ly']
   theta = params['theta']
   phi = params['phi']
-  print(f"This is the phi: {torch.mean(phi)}")
   pte = params['pte']
   ptm = params['ptm']
   lam0 = params['lam0']
