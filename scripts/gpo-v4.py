@@ -25,6 +25,8 @@ p['pixelsY'] = 20
 p['N'] = 1000
 p['sigmoid_update'] = 19
 p['learning_rate'] = 1
+p['sigmoid_update'] = 19
+p['learning_rate'] = 1
 p['parameter_string'] = 'N' + str(p['N']) + '-sigmoid_update' + str(p['sigmoid_update']) + '-learning_rate' + str(p['learning_rate'])
 step = 10
 wavelengths = np.arange(400, 600 + step, step = step)/1000.0
@@ -56,7 +58,7 @@ p['time'] = init_dt_string
 def loss_function(k, params, image_number = None, epoch_number = None):
     ER_t, UR_t = solver_metasurface_pt.generate_metasurface(k, params)
     image_pixels = ER_t[0, :, :, :, 0, 0]
-    binarization_loss = torch.sum((image_pixels - 1.0) * (3.4 - image_pixels)/(1.7 ** 2)/(20 * 20 * 3))
+    binarization_loss = 1 - torch.sum((image_pixels - 1.0) * (3.4 - image_pixels)/(1.7 ** 2)/(20 * 20 * 3))
     outputs = solver_pt.simulate(ER_t, UR_t, params)
     if not torch.sum(params['phi']):
         torch.save(image_pixels, f'../.log_{init_dt_string}/images/{image_number}_{epoch_number}.pt')
@@ -70,6 +72,7 @@ def loss_function(k, params, image_number = None, epoch_number = None):
     reflected_focal_plane = torch.flip(focal_plane, [1])
     symmetric_focal_plane = focal_plane + reflected_focal_plane
     p = torch.sum(torch.abs(symmetric_focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
+    with open(f'../log_{init_dt_string}/loss/wavelength_loss.txt', 'a+') as f:
     with open(f'../log_{init_dt_string}/loss/wavelength_loss.txt', 'a+') as f:
         f.write(str(p.cpu().detach().numpy()))
         f.write('\n')
