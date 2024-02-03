@@ -369,25 +369,32 @@ def optimize_device(user_params):
     params['loss_function'] = user_params['loss_function']
     params['restore_from'] = user_params['restore_from']
     n_images = 20
+    # n_images = 1
     angles = torch.linspace(-30, 0, steps = 7)
+    # angles = torch.linspace(0,0,steps=1)
     k_array = [torch.autograd.Variable(init_metasurface(params), requires_grad = True) for i in range(n_images)]
     generator = net.Generator()
+    start_epoch = 0
     if params['restore_from']:
         print(f'''Loading from prior state: {params['restore_from']}''')
-        generator.load_state_dict(torch.load(f'''../log_{init_dt_string}/models/{params['restore_from']}.pt''')) # Need to input loading for images, but logging has not finished yet
+        generator.load_state_dict(torch.load(f'''../.log_{params['restore_from']}/models/{params['restore_from']}.pt''')) # Need to input loading for images, but logging has not finished yet
+        k_array = [torch.load(f'''../.log_{params['restore_from']}/image_backup/{image_num}.pt''') for image_num in range(n_images)]
+        start_epoch = 0
+        params['sigmoid_coeff'] += start_epoch * params['sigmoid_update'] / params['N']
     opt = torch.optim.Adam(generator.parameters(), lr = params['learning_rate']) # Not tracking images yet, will start soon
     # TODO: check the learning rate, likely decrease since it seems to move around?
     N = params['N']
     loss = []
     init_dt_string = user_params['time']
     from os import system
-    system(f'mkdir ../log_{init_dt_string}/loss')
-    system(f'mkdir ../log_{init_dt_string}/storage')
-    system(f'mkdir ../log_{init_dt_string}/values_{init_dt_string}')
-    system(f'mkdir ../log_{init_dt_string}/storage_spread')
-    system(f'mkdir ../log_{init_dt_string}/image_backup')
-    system(f'mkdir ../log_{init_dt_string}/images')
-    system(f'mkdir ../log_{init_dt_string}/models')
+    system(f'mkdir ../.log_{init_dt_string}/')
+    system(f'mkdir ../.log_{init_dt_string}/loss')
+    system(f'mkdir ../.log_{init_dt_string}/storage')
+    system(f'mkdir ../.log_{init_dt_string}/values')
+    system(f'mkdir ../.log_{init_dt_string}/storage_spread')
+    system(f'mkdir ../.log_{init_dt_string}/image_backup')
+    system(f'mkdir ../.log_{init_dt_string}/images')
+    system(f'mkdir ../.log_{init_dt_string}/models')
     bias = 5
     n_ref = 2
     big_refresh = 15
@@ -395,26 +402,27 @@ def optimize_device(user_params):
     little_refresh = 3
     little_refresh_variance = 0.05
     l_val = torch.tensor(0.)
-    for epoch in range(N):
+    for epoch in range(start_epoch, N):
         if params['enable_print']: print(str(epoch) + ', ', end = '')
         opt.zero_grad()
         epoch_loss = []
         for image_num in range(n_images):
-            torch.save(k_array[image_num], f'../log_{init_dt_string}/image_backup/{image_num}.pt')
+            torch.save(k_array[image_num], f'../.log_{init_dt_string}/image_backup/{image_num}.pt')
             values = torch.clamp(generator(k_array[image_num], params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
+            values *= 0
             image_loss = []
             for angle in angles:
                 params['phi'] = torch.zeros(params['phi'].shape)
                 params['phi'] += angle
-                print(f"\nEpoch: {epoch}, iteration: {image_num}, angle: {angle}")
+                print(f"Epoch: {epoch}, iteration: {image_num}, angle: {angle}")
                 l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params, image_number = image_num, epoch_number = epoch)
                 if angle == 0:
-                    with open(f'../log_{init_dt_string}/values/values_{image_num}.txt', 'a+') as f:
+                    with open(f'../.log_{init_dt_string}/values/values_{image_num}.txt', 'a+') as f:
                         f.write(str(values))
                         f.write('\n')
-                torch.save(l, f'../log_{init_dt_string}/storage/storage_{image_num}_{angle}.pt') # This is still good practice because of the relative length of time of the simulation process
+                torch.save(l, f'../.log_{init_dt_string}/storage/storage_{image_num}_{angle}.pt') # This is still good practice because of the relative length of time of the simulation process
                 image_loss.append(l.cpu().detach().numpy())
-                with open(f'../log_{init_dt_string}/loss/angle_loss.txt', 'a+') as f:
+                with open(f'../.log_{init_dt_string}/loss/angle_loss.txt', 'a+') as f:
                     f.write(str(epoch))
                     f.write(', ')
                     f.write(str(image_num))
@@ -426,13 +434,14 @@ def optimize_device(user_params):
                 del l
             epoch_loss.append(np.mean(image_loss))
             print(f"This is the loss for the whole image: {np.mean(image_loss)}")
-            with open(f'../log_{init_dt_string}/loss/image_loss.txt', 'a+') as f:
+            with open(f'../.log_{init_dt_string}/loss/image_loss.txt', 'a+') as f:
                 f.write(str(epoch))
                 f.write(', ')
                 f.write(str(image_num))
                 f.write(' | ')
                 f.write(str(np.mean(image_loss)))
                 f.write('\n')
+
         if epoch % little_refresh == 0 and epoch:
             lottery_values = (np.array(epoch_loss) - np.min(epoch_loss)) / (np.max(epoch_loss) - np.min(epoch_loss))
             winning_lottery_values = np.e ** (-bias * np.array(lottery_values)) # Perform the transformation
@@ -449,48 +458,49 @@ def optimize_device(user_params):
                 k_array[losers_indices[lottery_i]] = k_array[winners_indices[lottery_i]] + torch.randn(size = k_array[winners_indices[lottery_i]].shape) * np.sqrt(little_refresh_variance)
                 k_array[losers_indices[lottery_i]] = torch.clamp(k_array[losers_indices[lottery_i]], min = -1, max = 1)
             print(f"Eliminating {losers_indices}, propagating {winners_indices}")
+
         l_val = torch.tensor(0.)
-        for i in range(n_images):
-            for j in angles:
-                loss_on_ram = torch.load(f'../log_{init_dt_string}/storage/storage_{i}_{j}.pt')
+        for image_num in range(n_images):
+            for angle in angles:
+                loss_on_ram = torch.load(f'../.log_{init_dt_string}/storage/storage_{image_num}_{angle}.pt')
                 l_val.add_(loss_on_ram)
                 del loss_on_ram
-                system(f'rm ../log_{init_dt_string}/storage/storage_{i}_{j}.pt')
+                system(f'rm ../.log_{init_dt_string}/storage/storage_{image_num}_{angle}.pt')
         l_result = l_val / (n_images * len(angles))
         l_result.backward()
         opt.step()
         params['sigmoid_coeff'] += (params['sigmoid_update'] / params['N'])
         loss.append(np.mean(epoch_loss))
         print(f"This is the loss for the whole epoch: {np.mean(epoch_loss)}")
-        with open(f'../log_{init_dt_string}/loss/epoch_loss.txt', 'a+') as f:
+        with open(f'../.log_{init_dt_string}/loss/epoch_loss.txt', 'a+') as f:
             f.write(str(epoch))
             f.write(', ')
             f.write(str(np.mean(epoch_loss)))
             f.write('\n')
-        torch.save(generator.state_dict(), f'../log_{init_dt_string}/models/{init_dt_string}.pt')
-        if epoch % big_refresh == 0 and epoch:
+        torch.save(generator.state_dict(), f'../.log_{init_dt_string}/models/{init_dt_string}.pt')
+        if epoch % big_refresh == 0 and epoch and epoch != N:
             explore_k_array = [torch.autograd.Variable(init_metasurface(params), requires_grad = True) for i in range(big_refresh_size)]
             new_image_loss = []
             for image_num in range(big_refresh_size):
+                new_angle_loss = []
                 for angle in angles:
                     params['phi'] = torch.zeros(params['phi'].shape)
                     params['phi'] += angle
                     print(f"Epoch: {epoch}, iteration: {image_num}, angle: {angle}")
                     values = torch.clamp(generator(explore_k_array[image_num], params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
                     l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params)
-                    torch.save(l, f'../log_{init_dt_string}/storage_spread/storage_{image_num}_{angle}.pt')
-                    new_image_loss.append(l.cpu().detach().numpy())
+                    torch.save(l, f'../.log_{init_dt_string}/storage_spread/storage_{image_num}_{angle}.pt')
+                    new_angle_loss.append(l.cpu().detach().numpy())
                     del l
-                new_image_loss.append(np.mean(image_loss))
+                new_image_loss.append(np.mean(new_angle_loss))
             expand_indices = np.argsort(new_image_loss)[:n_images]
             k_array_indices = np.argsort(epoch_loss)
             print(expand_indices)
-            for i in expand_indices:
-                k_array[k_array_indices[n_images - i]] = explore_k_array[expand_indices[i]]
+            for i in range(len(expand_indices)):
+                k_array[k_array_indices[n_images - 1 - i]] = explore_k_array[expand_indices[i]]
             print(f"This is the result from the random expansion: {epoch_loss}")
-    system(f'rmdir ../log_{init_dt_string}/storage')
+    system(f'rmdir ../.log_{init_dt_string}/storage')
     print(f"This is the loss over time: {loss}") # TODO: deal with remaining generator
-    torch.save(generator.state_dict(), f'../log_{init_dt_string}/models/{init_dt_string}.pt')
 
 def _optimize_device(user_params):
     '''
@@ -518,109 +528,8 @@ def _optimize_device(user_params):
         focal_plane: A `torch.Tensor` of shape `(batchSize, params['upsample'] * pixelsX,
             params['upsample'] * pixelsY)` and dtype `torch.complex64` specifying the 
             the electric fields at the output plane.
-
     '''
-    params = solver_pt.initialize_params(wavelengths=user_params['wavelengths'],
-                                  thetas=user_params['thetas'],
-                                  phis=user_params['phis'],
-                                  pte=user_params['pte'],
-                                  ptm=user_params['ptm'],
-                                  pixelsX=user_params['pixelsX'],
-                                  pixelsY=user_params['pixelsY'],
-                                  erd=user_params['erd'],
-                                  ers=user_params['ers'],
-                                  PQ=user_params['PQ'],
-                                  Lx=user_params['Lx'],
-                                  Ly=user_params['Ly'],
-                                  L=user_params['L'],
-                                  Nx=16,
-                                  eps_min=1.0,
-                                  eps_max=user_params['erd'])
-
-    # Merge with the user-provided parameter dictionary.
-    params['N'] = user_params['N']
-    params['sigmoid_coeff'] = user_params['sigmoid_coeff']
-    params['sigmoid_update'] = user_params['sigmoid_update']
-    params['learning_rate'] = user_params['learning_rate']
-    params['focal_spot_radius'] = user_params['focal_spot_radius']
-    params['enable_random_init'] = user_params['enable_random_init']
-    params['initial_height'] = user_params['initial_height']
-    params['enable_debug'] = user_params['enable_debug']
-    params['enable_print'] = user_params['enable_print']
-    params['enable_logging'] = user_params['enable_logging']
-    params['log_filename_prefix'] = user_params['log_filename_prefix']
-    params['log_filename_extension'] = user_params['log_filename_extension']
-    params['parameter_string'] = user_params['parameter_string']
-    params['loss_function'] = user_params['loss_function']
-
-    # Define the free-space propagator and input field distribution
-    # for the metasurface.
-    params['f'] = user_params['f'] * 1E-9
-    params['upsample'] = user_params['upsample']
-    params['propagator'] = solver_pt.make_propagator(params, params['f'])
-    params['input'] = solver_pt.define_input_fields(params)
-
-    # Get the initial height representation of the metasurface.
-    h = torch.autograd.Variable(init_layered_metasurface(params, initial_height=params['initial_height']),
-                                requires_grad=True)
-    # Initialize list of height representations. Used to track device change over optimzation run.
-    h_list = []
-    h_list.append(h)
-
-    # Define optimizer.
-    opt = torch.optim.Adam([h], lr=params['learning_rate'])
-    loss = np.zeros(params['N']+1)
-    # Optimize.
-    if params['enable_print']: print('Optimizing... ', end="")
-    for i in range(params['N']):
-        if params['enable_print']: print(str(i) + ', ', end="")
-        opt.zero_grad()
-        l = params['loss_function'](h, params)
-        l.backward()
-        opt.step()
-        loss[i] = l
-
-        # Anneal sigmoid coefficient.
-        params['sigmoid_coeff'] += (params['sigmoid_update'] / params['N'])
-        
-        # Track change in h.
-        h_list.append(h.clone().detach())
-        
-    if params['enable_print']: print('Done.')
-
-    # Round off to a final, admissable, solution.
-    # Do a final range clip.
-    h = torch.clamp(h, min=0, max=params['Nlay']-1)
-    # Round heights to nearest integer.
-    h = torch.round(h)
-
-    # Get final loss.
-    loss[-1] = params['loss_function'](h, params)
-    
-    # Get scattering pattern of final solution.
-    ER_t, UR_t = generate_layered_metasurface(h, params)
-    outputs = solver_pt.simulate(ER_t, UR_t, params)
-    field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0]
-    focal_plane = solver_pt.propagate(params['input'] * field, params['propagator'], params['upsample'])
-    
-    # Get the evaluation score of the resulting solution.
-    eval_score = evaluate_solution(focal_plane, params)
-
-    # Log result.
-    if params['enable_logging']:
-        hp_names = ['N', 'sigmoid_update', 'learning_rate', 'initial_height']
-        hyperparams = [user_params[name] for name in hp_names]
-        result = {'hyperparameter_names': list(hp_names),
-            'hyperparameters': hyperparams,
-            'h': h,
-            'loss': loss,
-            'focal_plane': focal_plane,
-            'eval_score': eval_score,
-            'params': params }
-        
-        log_result(result, params['log_filename_prefix'] + params['parameter_string'] + user_params['log_filename_extension'])
-    
-    return h, loss, params, focal_plane, h_list
+    pass
 
 
 def hyperparameter_gridsearch(user_params):
