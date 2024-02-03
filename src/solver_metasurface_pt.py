@@ -387,13 +387,14 @@ def optimize_device(user_params):
     loss = []
     init_dt_string = user_params['time']
     from os import system
-    system(f'mkdir ../log_{init_dt_string}/loss')
-    system(f'mkdir ../log_{init_dt_string}/storage')
-    system(f'mkdir ../log_{init_dt_string}/values_{init_dt_string}')
-    system(f'mkdir ../log_{init_dt_string}/storage_spread')
-    system(f'mkdir ../log_{init_dt_string}/image_backup')
-    system(f'mkdir ../log_{init_dt_string}/images')
-    system(f'mkdir ../log_{init_dt_string}/models')
+    system(f'mkdir ../.log_{init_dt_string}/')
+    system(f'mkdir ../.log_{init_dt_string}/loss')
+    system(f'mkdir ../.log_{init_dt_string}/storage')
+    system(f'mkdir ../.log_{init_dt_string}/values')
+    system(f'mkdir ../.log_{init_dt_string}/storage_spread')
+    system(f'mkdir ../.log_{init_dt_string}/image_backup')
+    system(f'mkdir ../.log_{init_dt_string}/images')
+    system(f'mkdir ../.log_{init_dt_string}/models')
     bias = 5
     n_ref = 2
     big_refresh = 15

@@ -72,8 +72,7 @@ def loss_function(k, params, image_number = None, epoch_number = None):
     reflected_focal_plane = torch.flip(focal_plane, [1])
     symmetric_focal_plane = focal_plane + reflected_focal_plane
     p = torch.sum(torch.abs(symmetric_focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network
-    with open(f'../log_{init_dt_string}/loss/wavelength_loss.txt', 'a+') as f:
-    with open(f'../log_{init_dt_string}/loss/wavelength_loss.txt', 'a+') as f:
+    with open(f'../.log_{init_dt_string}/loss/wavelength_loss.txt', 'a+') as f:
         f.write(str(p.cpu().detach().numpy()))
         f.write('\n')
     return torch.tensordot(determinator.type(p.type()), p, dims = 1) # Need a binarization coefficient # Negate this when starting a new run
