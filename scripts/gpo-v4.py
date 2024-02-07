@@ -35,7 +35,9 @@ determinator = -np.concatenate((np.arange(1, passthrough_wavelength_index + 2, d
 determinator[passthrough_wavelength_index] = 50
 determinator -= np.mean(determinator) # No bias traps
 determinator /= determinator[passthrough_wavelength_index] # Normal scaling, scaling ranges between 1 and -1
+
 determinator = torch.tensor(determinator, dtype = torch.float32) # TODO: check if 'dtype' makes the difference when initializing tensors to run on the GPU architecture
+
 p['thetas'] = np.zeros(len(wavelengths), dtype = 'float32')
 p['phis'] = deepcopy(p['thetas'])
 p['pte'] = deepcopy(p['thetas']) + 1
@@ -45,6 +47,7 @@ p['erd'] = 3.4 # Edit from ers
 p['L'] = np.zeros(shape = (3,)) + 5.0
 p['f'] = 0
 p['initial_k'] = np.zeros(shape = (p['L'].shape[0], p['pixelsX'], p['pixelsY'])) + 2.7
+# p['PQ'] = [2, 2]
 p['PQ'] = [3, 3]
 p['upsample'] = 2
 p['sigmoid_coeff'] = 1
@@ -64,11 +67,20 @@ def loss_function(k, params, image_number = None, epoch_number = None):
         torch.save(image_pixels, f'../.log_{init_dt_string}/images/{image_number}_{epoch_number}.pt')
         print(f"Binarization: {np.real(binarization_loss.cpu().detach().numpy())}")
     field = outputs['ty'][:, :, :, np.prod(params['PQ']) // 2, 0] #TODO: understand why we're taking the 4 in the answer even in the working solution
+    # print(torch.mean(outputs['ty']),'n',torch.mean(outputs['tx']),'n',torch.mean(outputs['tz']))
+    # print(torch.std(outputs['ty']),'n',torch.std(outputs['tx']),'n',torch.std(outputs['tz']))
+    # print(torch.mean(outputs['ry']),'n',torch.mean(outputs['rx']),'n',torch.mean(outputs['rz']))
+    # print(torch.std(outputs['ry']),'n',torch.std(outputs['rx']),'n',torch.std(outputs['rz']))
+    # print(torch.mean(torch.square(torch.real(outputs['ty']))), torch.mean(torch.square(torch.imag(outputs['ty']))))
+    # print(torch.mean(torch.square(torch.real(outputs['tx']))), torch.mean(torch.square(torch.imag(outputs['tx']))))
+    # print(torch.mean(torch.square(torch.real(outputs['tz']))), torch.mean(torch.square(torch.imag(outputs['tz']))))
+    # print(outputs['TRN'],outputs['REF'])
     focal_plane = solver_pt.propagate(params['input'] * field, params['propagator'], params['upsample'])
-    # print(f"this shape: {focal_plane.shape}")
-    print(focal_plane[0, :, 0])
-    import time
-    time.sleep(500)
+    # # print(f"this shape: {focal_plane.shape}")
+    # print(focal_plane[0, :, 0])
+    # print(focal_plane[0, 0, :])
+    # import time
+    # time.sleep(500)
     reflected_focal_plane = torch.flip(focal_plane, [1])
     symmetric_focal_plane = focal_plane + reflected_focal_plane
     p = torch.sum(torch.abs(symmetric_focal_plane), dim = (-1, -2)) # Deleting gradients? Find gradients with track=True and backpropagate throughout network

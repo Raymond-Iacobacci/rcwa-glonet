@@ -371,7 +371,6 @@ def optimize_device(user_params):
     n_images = 20
     n_images = 1
     angles = torch.linspace(-30, 0, steps = 7)
-    angles = torch.linspace(0,0,steps=1)
     k_array = [torch.autograd.Variable(init_metasurface(params), requires_grad = True) for i in range(n_images)]
     generator = net.Generator()
     start_epoch = 0
@@ -409,13 +408,13 @@ def optimize_device(user_params):
         for image_num in range(n_images):
             torch.save(k_array[image_num], f'../.log_{init_dt_string}/image_backup/{image_num}.pt')
             values = torch.clamp(generator(k_array[image_num], params['sigmoid_coeff']) * 0.5 * 1.05 + 0.5, min=0, max=1)
-            values *= 0
             image_loss = []
             for angle in angles:
-                params['phi'] = torch.zeros(params['phi'].shape)
-                params['phi'] += angle
+                params['theta'] = torch.zeros(params['theta'].shape)
+                params['theta'] += angle
                 print(f"Epoch: {epoch}, iteration: {image_num}, angle: {angle}")
                 l = params['loss_function'](values * (params['erd'] - 1.0) + 1, params, image_number = image_num, epoch_number = epoch)
+                print(f'this is the loss: {l}')
                 if angle == 0:
                     with open(f'../.log_{init_dt_string}/values/values_{image_num}.txt', 'a+') as f:
                         f.write(str(values))

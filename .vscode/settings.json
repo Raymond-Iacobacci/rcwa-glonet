@@ -1,4 +1,5 @@
 {
     "cloudcode.duetAI.inlineSuggestions.enableAuto": false,
-    "CodeGPT.apiKey": "CodeGPT Plus Beta"
+    "CodeGPT.apiKey": "CodeGPT Plus Beta",
+    "python.analysis.typeCheckingMode": "basic"
 }
